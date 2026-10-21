@@ -1,0 +1,16 @@
+# Build results
+bin/
+obj/
+.vs/
+packages/
+
+# User settings
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
