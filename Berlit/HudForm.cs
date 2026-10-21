@@ -1,19 +1,32 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 
 namespace Berlit
 {
     /// <summary>
-    /// Оверлей поверх всех окон: маленькая графитовая плашка с бирюзовыми
-    /// значениями CPU / GPU / RAM и FPS. Окно не забирает фокус, не показывается
-    /// в панели задач и пропускает клики сквозь себя — его нельзя ни нажать,
-    /// ни перетащить, ни случайно закрыть.
+    /// РћРІРµСЂР»РµР№ РїРѕРІРµСЂС… РІСЃРµС… РѕРєРѕРЅ: РєРѕРјРїР°РєС‚РЅР°СЏ РіСЂР°С„РёС‚РѕРІР°СЏ РїР»Р°С€РєР°, РІ РєРѕС‚РѕСЂРѕР№ РєР°Р¶РґР°СЏ
+    /// РјРµС‚СЂРёРєР° РёРґС‘С‚ СЃРІРѕРµР№ СЃС‚СЂРѕРєРѕР№ вЂ” FPS, CPU, GPU, RAM. РћРєРЅРѕ РЅРµ Р·Р°Р±РёСЂР°РµС‚ С„РѕРєСѓСЃ,
+    /// РЅРµ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ РІ РїР°РЅРµР»Рё Р·Р°РґР°С‡ Рё РїСЂРѕРїСѓСЃРєР°РµС‚ РєР»РёРєРё СЃРєРІРѕР·СЊ СЃРµР±СЏ: РµРіРѕ РЅРµР»СЊР·СЏ
+    /// РЅРё РЅР°Р¶Р°С‚СЊ, РЅРё РїРµСЂРµС‚Р°С‰РёС‚СЊ, РЅРё СЃР»СѓС‡Р°Р№РЅРѕ Р·Р°РєСЂС‹С‚СЊ.
     /// </summary>
     internal sealed class HudForm : Form
     {
-        private const float BaseWidth = 252f;
-        private const float BaseHeight = 78f;
+        // Р Р°Р·РјРµСЂС‹ Рё РєРѕРѕСЂРґРёРЅР°С‚С‹ Р·Р°РґР°РЅС‹ РІ РµРґРёРЅРёС†Р°С… 96 DPI Рё СѓРјРЅРѕР¶Р°СЋС‚СЃСЏ РЅР° _scale.
+        private const float BaseWidth = 236f;
+        private const float BaseHeight = 98f;
+
+        private const float LeftMargin = 12f;
+        private const float LabelWidth = 34f;
+        private const float LoadLeft = 58f;
+        private const float LoadWidth = 62f;
+        private const float TempLeft = 122f;
+        private const float TempWidth = 58f;
+
+        private const float RowBrand = 6f;
+        private const float RowCpu = 28f;
+        private const float RowGpu = 50f;
+        private const float RowRam = 72f;
 
         private readonly FpsMeter _fps = new FpsMeter();
         private readonly Timer _timer = new Timer();
@@ -34,7 +47,7 @@ namespace Berlit
             TopMost = true;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(10, 10, 10);
-            Opacity = 1.0;
+            Opacity = 0.9f;
             AutoScaleMode = AutoScaleMode.None;
             Text = "Berlit";
             Cursor = Cursors.Default;
@@ -53,9 +66,9 @@ namespace Berlit
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= 0x00000020;   // WS_EX_TRANSPARENT — клики проходят сквозь окно
-                cp.ExStyle |= 0x08000000;   // WS_EX_NOACTIVATE — не забирает фокус
-                cp.ExStyle |= 0x00000080;   // WS_EX_TOOLWINDOW — не в Alt+Tab
+                cp.ExStyle |= 0x00000020;   // WS_EX_TRANSPARENT вЂ” РєР»РёРєРё РїСЂРѕС…РѕРґСЏС‚ СЃРєРІРѕР·СЊ РѕРєРЅРѕ
+                cp.ExStyle |= 0x08000000;   // WS_EX_NOACTIVATE вЂ” РЅРµ Р·Р°Р±РёСЂР°РµС‚ С„РѕРєСѓСЃ
+                cp.ExStyle |= 0x00000080;   // WS_EX_TOOLWINDOW вЂ” РЅРµ РІ Alt+Tab
                 return cp;
             }
         }
@@ -130,32 +143,34 @@ namespace Berlit
             using (var pen = new Pen(Color.FromArgb(46, 46, 46)))
                 g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
 
-            DrawText(g, "Berlit", _brandFont, Theme.TextDim, 12, 7, 80, 16, HorizontalAlignment.Left);
-
-            DrawText(g, "FPS", _labelFont, Theme.TextFaint, BaseWidth - 98, 8, 30, 15, HorizontalAlignment.Right);
+            // РЎС‚СЂРѕРєР° 1: РёРјСЏ РїСЂРѕРіСЂР°РјРјС‹ Рё FPS.
+            DrawText(g, "Berlit", _brandFont, Theme.TextDim, LeftMargin, RowBrand, 100, 16, HorizontalAlignment.Left);
+            DrawText(g, "FPS", _labelFont, Theme.TextFaint, 142, RowBrand + 1, 30, 15, HorizontalAlignment.Right);
             DrawText(g, FormatFps(), _valueFont,
                 _fps.Available ? Theme.Accent : Theme.TextFaint,
-                BaseWidth - 64, 6, 50, 18, HorizontalAlignment.Right);
+                176, RowBrand - 1, 54, 18, HorizontalAlignment.Right);
 
-            DrawMetric(g, 12, 29, "CPU", FormatLoad(_snapshot.CpuLoad), _snapshot.CpuTemp);
-            DrawMetric(g, 132, 29, "GPU",
+            // РЎС‚СЂРѕРєРё 2-4: РїРѕ РѕРґРЅРѕР№ РјРµС‚СЂРёРєРµ РЅР° СЃС‚СЂРѕРєСѓ.
+            DrawMetric(g, RowCpu, "CPU", FormatLoad(_snapshot.CpuLoad), _snapshot.CpuTemp);
+            DrawMetric(g, RowGpu, "GPU",
                 _snapshot.HasGpu ? FormatLoad(_snapshot.GpuLoad) : "\u2014",
                 _snapshot.HasGpu ? _snapshot.GpuTemp : null);
 
-            DrawText(g, "RAM", _labelFont, Theme.TextFaint, 12, 52, 34, 16, HorizontalAlignment.Left);
+            DrawText(g, "RAM", _labelFont, Theme.TextFaint, LeftMargin, RowRam, LabelWidth, 16, HorizontalAlignment.Left);
             DrawText(g, FormatPercent(_snapshot.RamPercent), _valueFont, Theme.Accent,
-                48, 51, 60, 18, HorizontalAlignment.Left);
+                LoadLeft, RowRam - 1, LoadWidth, 18, HorizontalAlignment.Right);
         }
 
-        private void DrawMetric(Graphics g, float x, float y, string label, string load, double? temperature)
+        /// <summary>РЎС‚СЂРѕРєР° РјРµС‚СЂРёРєРё: РїРѕРґРїРёСЃСЊ, Р·Р°РіСЂСѓР·РєР° Рё С‚РµРјРїРµСЂР°С‚СѓСЂР° РІ СЃРІРѕРёС… РєРѕР»РѕРЅРєР°С….</summary>
+        private void DrawMetric(Graphics g, float y, string label, string load, double? temperature)
         {
-            DrawText(g, label, _labelFont, Theme.TextFaint, x, y, 34, 16, HorizontalAlignment.Left);
-            DrawText(g, load, _valueFont, Theme.Accent, x + 34, y - 1, 40, 18, HorizontalAlignment.Right);
+            DrawText(g, label, _labelFont, Theme.TextFaint, LeftMargin, y, LabelWidth, 16, HorizontalAlignment.Left);
+            DrawText(g, load, _valueFont, Theme.Accent, LoadLeft, y - 1, LoadWidth, 18, HorizontalAlignment.Right);
 
             double? temp = temperature;
             string text = FormatTemp(temp);
             Color color = !temp.HasValue ? Theme.TextFaint : TemperatureColor(temp.Value);
-            DrawText(g, text, _valueFont, color, x + 74, y - 1, 40, 18, HorizontalAlignment.Right);
+            DrawText(g, text, _valueFont, color, TempLeft, y - 1, TempWidth, 18, HorizontalAlignment.Right);
         }
 
         private void DrawText(Graphics g, string text, Font font, Color color,

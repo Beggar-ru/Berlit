@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Reflection;
@@ -35,9 +36,19 @@ namespace Berlit
         private int _processSort = 2;           // CPU
         private bool _processAscending = false;
 
+        /// <summary>В конструкторе формы DesignMode ещё не выставлен — используем LicenseManager.</summary>
+        private static bool IsDesignTime
+        {
+            get { return LicenseManager.UsageMode == LicenseUsageMode.Designtime; }
+        }
+
         public Berlit()
         {
             InitializeComponent();
+
+            // В дизайнере форму конструирует хост Visual Studio:
+            // грузить иконку и подписываться на события ему незачем.
+            if (IsDesignTime) return;
 
             try { Icon = new Icon(typeof(Berlit), "berlit.ico"); }
             catch { }
