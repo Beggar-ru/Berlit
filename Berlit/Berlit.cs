@@ -38,6 +38,9 @@ namespace Berlit
         {
             InitializeComponent();
 
+            try { Icon = new Icon(typeof(Berlit), "berlit.ico"); }
+            catch { }
+
             dataGridServices.ColumnHeaderClicked += dataGridServices_ColumnHeaderClicked;
             dataGridProcesses.ColumnHeaderClicked += dataGridProcesses_ColumnHeaderClicked;
         }

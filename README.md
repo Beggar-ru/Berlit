@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" width="132" alt="Berlit logo">
+</p>
+
 # Berlit
 
 Монитор оборудования для Windows: процессор, память, видеокарта, накопители,
