@@ -317,27 +317,75 @@ namespace Berlit
 
             string name = string.IsNullOrEmpty(MachineInfo.CpuName) ? "Processor" : MachineInfo.CpuName;
             var cpu = new HwNode(name, HwNodeKind.Component) { Expanded = true };
-
-            int threads = _cpuDetails != null && _cpuDetails.Logical > 0 ? _cpuDetails.Logical : _logicalCpus;
-            string summary = ( _cpuDetails != null && _cpuDetails.Cores > 0
-                                   ? _cpuDetails.Cores + "C / " + threads + "T"
-                                   : threads + " threads") +
-                             "  \u00B7  " + HwFormat.Ghz(_nominalMhz) + " base";
-            cpu.Set(HwCol.Info, summary, HwLevel.Dim);
             list.Add(cpu);
 
-            HwNode total = Sensor(cpu, "Total load");
-            if (_cpu.HasLoad)
-                total.Set(HwCol.Load, HwFormat.Percent(_cpuLoad), LoadLevel(_cpuLoad));
-            else
-                total.Set(HwCol.Load, NoData, HwLevel.Dim);
+            HardwareReadings lhmCpu = FindHardware(HardwareType.Cpu);
 
-            HwNode clock = Sensor(cpu, "Effective clock");
-            if (_cpu.HasFrequency)
-                clock.Set(HwCol.Clock, HwFormat.Ghz(_cpu.FrequencyMhz));
+            int threads = _cpuDetails != null && _cpuDetails.Logical > 0 ? _cpuDetails.Logical : _logicalCpus;
+            string summary = (_cpuDetails != null && _cpuDetails.Cores > 0
+                                  ? _cpuDetails.Cores + "C / " + threads + "T"
+                                  : threads + " threads") +
+                             "  \u00B7  " + HwFormat.Ghz(_nominalMhz) + " base";
+            cpu.Set(HwCol.Info, summary, HwLevel.Dim);
+
+            // Всё, что относится к процессору целиком, — в его собственной строке.
+            if (_cpu.HasLoad)
+                cpu.Set(HwCol.Load, HwFormat.Percent(_cpuLoad), LoadLevel(_cpuLoad));
             else
-                clock.Set(HwCol.Clock, HwFormat.Ghz(_nominalMhz), HwLevel.Dim)
-                     .Set(HwCol.Info, "nominal", HwLevel.Dim);
+                cpu.Set(HwCol.Load, NoData, HwLevel.Dim);
+
+            if (_cpu.HasFrequency)
+                cpu.Set(HwCol.Clock, HwFormat.Ghz(_cpu.FrequencyMhz));
+            else
+                cpu.Set(HwCol.Clock, HwFormat.Ghz(_nominalMhz), HwLevel.Dim);
+
+            SensorReading packageTemp = FindSensor(lhmCpu, SensorType.Temperature, "CPU Package");
+            if (IsMeasured(packageTemp))
+                ApplyTemperature(cpu, packageTemp.Value.Value, "cpu.package");
+
+            SensorReading packagePower = FindSensor(lhmCpu, SensorType.Power, "CPU Package");
+            if (IsMeasured(packagePower))
+                cpu.Set(HwCol.Power, HwFormat.Watt(packagePower.Value.Value));
+
+            SensorReading cpuVoltage = FindAnySensor(lhmCpu, SensorType.Voltage);
+            if (IsMeasured(cpuVoltage))
+                cpu.Set(HwCol.Voltage, HwFormat.Volt(cpuVoltage.Value.Value));
+
+            var coreTemps = new Dictionary<int, SensorReading>();
+            var coreClocks = new Dictionary<int, SensorReading>();
+            var coreVolts = new Dictionary<int, SensorReading>();
+            CollectCoreSensors(lhmCpu, SensorType.Temperature, coreTemps);
+            CollectCoreSensors(lhmCpu, SensorType.Clock, coreClocks);
+            CollectCoreSensors(lhmCpu, SensorType.Voltage, coreVolts);
+
+            int coreCount = Math.Max(coreTemps.Count, Math.Max(coreClocks.Count, coreVolts.Count));
+            if (coreCount == 0 && _cpuDetails != null && _cpuDetails.Cores > 0)
+                coreCount = _cpuDetails.Cores;
+            if (coreCount == 0)
+                coreCount = _cpu.CoreLoads.Length;
+
+            // Одна строка на ядро: загрузка, температура (min/сейчас/max), частота, напряжение.
+            for (int i = 0; i < coreCount; i++)
+            {
+                HwNode row = Sensor(cpu, "Core #" + (i + 1).ToString(CultureInfo.InvariantCulture));
+
+                double? load = CoreLoadFor(i, coreCount, _cpu.CoreLoads);
+                if (load.HasValue)
+                    row.Set(HwCol.Load, HwFormat.Percent(load.Value), LoadLevel(load.Value));
+
+                SensorReading temperature;
+                if (coreTemps.TryGetValue(i + 1, out temperature))
+                    ApplyTemperature(row, temperature.Value.Value,
+                        "cpu.core" + (i + 1).ToString(CultureInfo.InvariantCulture));
+
+                SensorReading clock;
+                if (coreClocks.TryGetValue(i + 1, out clock))
+                    row.Set(HwCol.Clock, HwFormat.Ghz(clock.Value.Value));
+
+                SensorReading voltage;
+                if (coreVolts.TryGetValue(i + 1, out voltage))
+                    row.Set(HwCol.Voltage, HwFormat.Volt(voltage.Value.Value));
+            }
 
             if (_cpuDetails != null)
             {
@@ -349,28 +397,6 @@ namespace Berlit
                     Sensor(cpu, "L3 cache").Set(HwCol.Info, HwFormat.Bytes(_cpuDetails.L3), HwLevel.Dim);
             }
 
-            for (int i = 0; i < _cpu.CoreLoads.Length; i++)
-            {
-                double load = _cpu.CoreLoads[i];
-                Sensor(cpu, "Core #" + (i + 1).ToString(CultureInfo.InvariantCulture))
-                    .Set(HwCol.Load, HwFormat.Percent(load), LoadLevel(load));
-            }
-
-            HardwareReadings lhmCpu = FindHardware(HardwareType.Cpu);
-            if (lhmCpu != null)
-            {
-                AddSensorGroup(cpu, "Temperatures", lhmCpu, SensorType.Temperature,
-                    delegate (string sensorName)
-                    {
-                        return sensorName.StartsWith("CPU Core #", StringComparison.OrdinalIgnoreCase) ||
-                               sensorName.Equals("CPU Package", StringComparison.OrdinalIgnoreCase);
-                    },
-                    CompareCpuTemperatures);
-
-                AddSensorGroup(cpu, "Power", lhmCpu, SensorType.Power, null, null);
-                AddSensorGroup(cpu, "Voltage", lhmCpu, SensorType.Voltage, null, null);
-            }
-
             return list;
         }
 
@@ -380,18 +406,21 @@ namespace Berlit
             var list = new List<HwNode>();
 
             var memory = new HwNode("Physical memory", HwNodeKind.Component) { Expanded = true };
-            memory.Set(HwCol.Info, _ramTotalGb > 0 ? HwFormat.Gb(_ramTotalGb) + " total" : NoData, HwLevel.Dim);
+            list.Add(memory);
 
-            double usedPercent = _ramTotalGb > 0 ? _ramUsedGb / _ramTotalGb * 100.0 : 0;
-            HwNode used = Sensor(memory, "Memory used");
             if (_ramTotalGb > 0)
-                used.Set(HwCol.Load, HwFormat.Percent(usedPercent), LoadLevel(usedPercent))
-                    .Set(HwCol.Info, HwFormat.Gb(_ramUsedGb) + " / " + HwFormat.Gb(_ramTotalGb));
+            {
+                double usedPercent = _ramUsedGb / _ramTotalGb * 100.0;
+                memory.Set(HwCol.Load, HwFormat.Percent(usedPercent), LoadLevel(usedPercent))
+                      .Set(HwCol.Info,
+                          HwFormat.Gb(_ramUsedGb) + " / " + HwFormat.Gb(_ramTotalGb) +
+                          "  \u00B7  " + HwFormat.Gb(_ramAvailableGb) + " free",
+                          HwLevel.Dim);
+            }
             else
-                used.Set(HwCol.Load, NoData, HwLevel.Dim);
-
-            if (_ramTotalGb > 0)
-                Sensor(memory, "Memory available").Set(HwCol.Info, HwFormat.Gb(_ramAvailableGb));
+            {
+                memory.Set(HwCol.Load, NoData, HwLevel.Dim);
+            }
 
             foreach (WmiProbe.MemoryModule module in _modules)
             {
@@ -406,7 +435,6 @@ namespace Berlit
                 if (speed > 0) row.Set(HwCol.Clock, HwFormat.Mhz(speed), HwLevel.Dim);
             }
 
-            list.Add(memory);
             return list;
         }
 
@@ -418,8 +446,8 @@ namespace Berlit
             if (_adapters.Count == 0)
             {
                 var unknown = new HwNode("Video adapter", HwNodeKind.Component) { Expanded = true };
-                unknown.Set(HwCol.Info, "adapter not detected (DXGI unavailable)", HwLevel.Dim);
-                Sensor(unknown, "GPU load").Set(HwCol.Load, NoData, HwLevel.Dim);
+                unknown.Set(HwCol.Load, NoData, HwLevel.Dim)
+                       .Set(HwCol.Info, "adapter not detected (DXGI unavailable)", HwLevel.Dim);
                 list.Add(unknown);
                 return list;
             }
@@ -427,29 +455,56 @@ namespace Berlit
             foreach (GpuAdapterInfo adapter in _adapters)
             {
                 var gpu = new HwNode(adapter.Name, HwNodeKind.Component) { Expanded = true };
-
-                string driver = MachineInfo.GetGpuDriverVersion(adapter.Name);
-                string pci = string.Format(CultureInfo.InvariantCulture, "{0:X4}:{1:X4}", adapter.VendorId, adapter.DeviceId);
-                string info = Combine(adapter.VendorName, "PCI " + pci);
-                if (!string.IsNullOrEmpty(driver)) info += "  \u00B7  driver " + driver;
-                gpu.Set(HwCol.Info, info, HwLevel.Dim);
                 list.Add(gpu);
 
                 GpuSampler.GpuReading reading;
                 bool hasReading = _gpuReadings.TryGetValue(adapter.Luid, out reading);
+                HardwareReadings lhmGpu = FindGpu(adapter.Name);
 
-                HwNode load = Sensor(gpu, "GPU load (3D)");
+                // Загрузка 3D — в строке самой видеокарты.
                 if (hasReading && _gpu.Available)
-                    load.Set(HwCol.Load, HwFormat.Percent(reading.Load3D), LoadLevel(reading.Load3D));
+                    gpu.Set(HwCol.Load, HwFormat.Percent(reading.Load3D), LoadLevel(reading.Load3D));
                 else
-                    load.Set(HwCol.Load, NoData, HwLevel.Dim);
+                    gpu.Set(HwCol.Load, NoData, HwLevel.Dim);
 
-                // У встроенного видео «выделенная» память — это небольшое окно
-                // в ОЗУ, поэтому проценты по ней ничего не значат: показываем
-                // реально занятую общую память.
-                bool integrated = adapter.DedicatedVideoMemory < 512L * 1024 * 1024;
+                SensorReading coreTemp = FindSensor(lhmGpu, SensorType.Temperature, "GPU Core");
+                if (IsMeasured(coreTemp))
+                    ApplyTemperature(gpu, coreTemp.Value.Value,
+                        "gpu." + adapter.Luid.ToString(CultureInfo.InvariantCulture));
 
+                // Hot spot — вторая точка нагрева; держим в описании, чтобы не плодить строки.
+                string hotSpot = string.Empty;
+                SensorReading hotSpotSensor = FindSensor(lhmGpu, SensorType.Temperature, "GPU Hot Spot");
+                if (IsMeasured(hotSpotSensor))
+                    hotSpot = "hot spot " + HwFormat.Celsius(hotSpotSensor.Value.Value);
+
+                SensorReading fan = FindAnySensor(lhmGpu, SensorType.Fan);
+                if (IsMeasured(fan)) gpu.Set(HwCol.FanRpm, HwFormat.Rpm(fan.Value.Value));
+
+                SensorReading clock = FindSensor(lhmGpu, SensorType.Clock, "GPU Core");
+                if (IsMeasured(clock)) gpu.Set(HwCol.Clock, HwFormat.Ghz(clock.Value.Value));
+
+                SensorReading voltage = FindSensor(lhmGpu, SensorType.Voltage, "GPU Core");
+                if (IsMeasured(voltage)) gpu.Set(HwCol.Voltage, HwFormat.Volt(voltage.Value.Value));
+
+                SensorReading power = FindAnySensor(lhmGpu, SensorType.Power);
+                if (IsMeasured(power)) gpu.Set(HwCol.Power, HwFormat.Watt(power.Value.Value));
+
+                string driver = MachineInfo.GetGpuDriverVersion(adapter.Name);
+                string pci = string.Format(CultureInfo.InvariantCulture, "{0:X4}:{1:X4}",
+                    adapter.VendorId, adapter.DeviceId);
+                string vram = adapter.DedicatedVideoMemory > 0
+                                  ? HwFormat.Bytes(adapter.DedicatedVideoMemory) + " VRAM"
+                                  : string.Empty;
+
+                gpu.Set(HwCol.Info,
+                    Combine(adapter.VendorName, "PCI " + pci,
+                        driver.Length > 0 ? "driver " + driver : string.Empty, vram, hotSpot),
+                    HwLevel.Dim);
+
+                // Занятая видеопамять — отдельная сущность со своим процентом.
                 HwNode memory = Sensor(gpu, "GPU memory");
+                bool integrated = adapter.DedicatedVideoMemory < 512L * 1024 * 1024;
                 if (hasReading && !integrated && reading.DedicatedBytes.HasValue && adapter.DedicatedVideoMemory > 0)
                 {
                     double dedicated = reading.DedicatedBytes.Value;
@@ -466,14 +521,6 @@ namespace Berlit
                 {
                     memory.Set(HwCol.Info, NoData, HwLevel.Dim);
                 }
-
-                if (adapter.DedicatedVideoMemory > 0)
-                    Sensor(gpu, "Dedicated VRAM").Set(HwCol.Info, HwFormat.Bytes(adapter.DedicatedVideoMemory), HwLevel.Dim);
-                if (adapter.SharedSystemMemory > 0)
-                    Sensor(gpu, "Shared system memory").Set(HwCol.Info, HwFormat.Bytes(adapter.SharedSystemMemory), HwLevel.Dim);
-
-                HardwareReadings lhmGpu = FindGpu(adapter.Name);
-                if (lhmGpu != null) AddGpuSensors(gpu, lhmGpu);
             }
 
             return list;
@@ -505,6 +552,7 @@ namespace Berlit
                     disk.Size > 0 ? HwFormat.Bytes(disk.Size) : string.Empty,
                     string.IsNullOrEmpty(disk.Serial) ? string.Empty : "SN " + disk.Serial);
                 node.Set(HwCol.Info, info, HwLevel.Dim);
+                AddStorageTemperature(node, disk);
                 list.Add(node);
 
                 if (disk.Volumes.Count == 0)
@@ -528,8 +576,6 @@ namespace Berlit
                         .Set(HwCol.Load, HwFormat.Percent(percent), UsageLevel(percent))
                         .Set(HwCol.Info, details);
                 }
-
-                AddStorageSensors(node, disk.Model);
             }
 
             if (list.Count == 0)
@@ -680,25 +726,6 @@ namespace Berlit
             return value > 0.01 && !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
-        private void AddSensorGroup(HwNode parent, string title, HardwareReadings hardware, SensorType type,
-                                    Func<string, bool> include, Comparison<SensorReading> order)
-        {
-            var selected = new List<SensorReading>();
-            foreach (SensorReading sensor in hardware.Sensors)
-            {
-                if (sensor.Type != type || !IsMeasured(sensor)) continue;
-                if (include != null && !include(sensor.Name)) continue;
-                selected.Add(sensor);
-            }
-
-            if (selected.Count == 0) return;
-            if (order != null) selected.Sort(order);
-
-            HwNode group = parent.Add(new HwNode(title, HwNodeKind.Component) { Expanded = true });
-            foreach (SensorReading sensor in selected)
-                ApplySensorValue(Sensor(group, sensor.Name), type, sensor.Value.Value);
-        }
-
         private HwNode AddBoardSensorGroup(HwNode board, string title, List<HardwareReadings> parts, SensorType type)
         {
             var selected = new List<SensorReading>();
@@ -723,41 +750,94 @@ namespace Berlit
             return group;
         }
 
-        private void AddGpuSensors(HwNode gpu, HardwareReadings hardware)
+        /// <summary>Датчик с точным именем (без учёта регистра) и измеренным значением.</summary>
+        private static SensorReading FindSensor(HardwareReadings hardware, SensorType type, string name)
         {
-            AddGpuRow(gpu, hardware, "Core temperature", SensorType.Temperature, "GPU Core");
-            AddGpuRow(gpu, hardware, "Hot spot", SensorType.Temperature, "GPU Hot Spot");
-            AddGpuRow(gpu, hardware, "Memory temperature", SensorType.Temperature, "GPU Memory");
-            AddGpuRow(gpu, hardware, "Core clock", SensorType.Clock, "GPU Core");
-            AddGpuRow(gpu, hardware, "Fan", SensorType.Fan, null);
-            AddGpuRow(gpu, hardware, "Power", SensorType.Power, null);
-            AddGpuRow(gpu, hardware, "Voltage", SensorType.Voltage, null);
-        }
+            if (hardware == null) return null;
 
-        private void AddGpuRow(HwNode gpu, HardwareReadings hardware, string title, SensorType type, string sensorName)
-        {
             foreach (SensorReading sensor in hardware.Sensors)
             {
                 if (sensor.Type != type || !IsMeasured(sensor)) continue;
-                if (sensorName != null && !sensor.Name.Equals(sensorName, StringComparison.OrdinalIgnoreCase)) continue;
-
-                ApplySensorValue(Sensor(gpu, title), type, sensor.Value.Value);
-                return;
+                if (sensor.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return sensor;
             }
+            return null;
         }
 
-        private void AddStorageSensors(HwNode disk, string model)
+        private static SensorReading FindAnySensor(HardwareReadings hardware, SensorType type)
         {
-            HardwareReadings hardware = FindStorage(model);
+            if (hardware == null) return null;
+
+            foreach (SensorReading sensor in hardware.Sensors)
+                if (sensor.Type == type && IsMeasured(sensor)) return sensor;
+            return null;
+        }
+
+        /// <summary>Раскладывает датчики ядер («CPU Core #N») по номеру ядра.</summary>
+        private static void CollectCoreSensors(HardwareReadings hardware, SensorType type,
+                                               Dictionary<int, SensorReading> target)
+        {
             if (hardware == null) return;
 
             foreach (SensorReading sensor in hardware.Sensors)
             {
-                if (sensor.Type != SensorType.Temperature || !IsMeasured(sensor)) continue;
+                if (sensor.Type != type || !IsMeasured(sensor)) continue;
+                if (sensor.Name.IndexOf("Thread", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
-                ApplySensorValue(Sensor(disk, "Temperature"), SensorType.Temperature, sensor.Value.Value);
-                return;
+                int core = ParseCoreNumber(sensor.Name);
+                if (core <= 0 || target.ContainsKey(core)) continue;
+                target[core] = sensor;
             }
+        }
+
+        private static int ParseCoreNumber(string name)
+        {
+            if (!name.StartsWith("CPU Core #", StringComparison.OrdinalIgnoreCase)) return -1;
+
+            int hash = name.IndexOf('#');
+            int value = 0;
+            bool any = false;
+            for (int i = hash + 1; i < name.Length && char.IsDigit(name[i]); i++)
+            {
+                value = value * 10 + (name[i] - '0');
+                any = true;
+            }
+            return any ? value : -1;
+        }
+
+        /// <summary>
+        /// Загрузка физического ядра. Счётчики Windows дают загрузку по логическим
+        /// потокам, поэтому при 2N потоках на N ядер берём среднее пары.
+        /// </summary>
+        private static double? CoreLoadFor(int index, int cores, double[] loads)
+        {
+            if (loads == null || loads.Length == 0) return null;
+            if (loads.Length == cores) return loads[index];
+            if (loads.Length == cores * 2) return (loads[index] + loads[index + cores]) / 2.0;
+            if (index < loads.Length) return loads[index];
+            return null;
+        }
+
+        /// <summary>Температура с накоплением min/max в той же строке, где и остальные параметры.</summary>
+        private void ApplyTemperature(HwNode row, double value, string key)
+        {
+            Range range = Track(key, value);
+            if (range.HasValue) row.Set(HwCol.TempMin, HwFormat.Celsius(range.Min));
+            row.Set(HwCol.Temp, HwFormat.Celsius(value), TemperatureLevel(value));
+            if (range.HasValue) row.Set(HwCol.TempMax, HwFormat.Celsius(range.Max));
+        }
+
+        private void AddStorageTemperature(HwNode disk, StorageProbe.DiskInfo info)
+        {
+            HardwareReadings hardware = FindStorage(info.Model);
+            if (hardware == null) return;
+
+            SensorReading sensor = FindAnySensor(hardware, SensorType.Temperature);
+            if (!IsMeasured(sensor)) return;
+
+            string key = info.Number >= 0
+                             ? info.Number.ToString(CultureInfo.InvariantCulture)
+                             : info.Model;
+            ApplyTemperature(disk, sensor.Value.Value, "disk." + key);
         }
 
         private void ApplySensorValue(HwNode row, SensorType type, double value)
@@ -765,10 +845,7 @@ namespace Berlit
             switch (type)
             {
                 case SensorType.Temperature:
-                    Range range = Track("lhm/" + row.Path, value);
-                    if (range.HasValue) row.Set(HwCol.TempMin, HwFormat.Celsius(range.Min));
-                    row.Set(HwCol.Temp, HwFormat.Celsius(value), TemperatureLevel(value));
-                    if (range.HasValue) row.Set(HwCol.TempMax, HwFormat.Celsius(range.Max));
+                    ApplyTemperature(row, value, "lhm/" + row.Path);
                     break;
 
                 case SensorType.Voltage:
@@ -791,30 +868,6 @@ namespace Berlit
                     row.Set(HwCol.Info, HwFormat.Percent(value), HwLevel.Dim);
                     break;
             }
-        }
-
-        private static int CompareCpuTemperatures(SensorReading left, SensorReading right)
-        {
-            bool leftPackage = left.Name.Equals("CPU Package", StringComparison.OrdinalIgnoreCase);
-            bool rightPackage = right.Name.Equals("CPU Package", StringComparison.OrdinalIgnoreCase);
-            if (leftPackage != rightPackage) return leftPackage ? -1 : 1;
-
-            int leftIndex = CoreIndex(left.Name);
-            int rightIndex = CoreIndex(right.Name);
-            if (leftIndex != rightIndex) return leftIndex.CompareTo(rightIndex);
-
-            return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int CoreIndex(string name)
-        {
-            int hash = name.IndexOf('#');
-            if (hash < 0 || hash + 1 >= name.Length) return int.MaxValue;
-
-            int index = 0;
-            for (int i = hash + 1; i < name.Length && char.IsDigit(name[i]); i++)
-                index = index * 10 + (name[i] - '0');
-            return index;
         }
 
         // ==================================================================
