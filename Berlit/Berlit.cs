@@ -16,6 +16,7 @@ namespace Berlit
     {
         private IHardwareProvider _provider;
         private readonly ProcessCpuTracker _cpuTracker = new ProcessCpuTracker();
+        private HudForm _overlay;
 
         private bool _ready;
         private bool _hardwareBusy;
@@ -96,6 +97,20 @@ namespace Berlit
         {
             _ready = false;
             timerRefresh.Stop();
+
+            if (_overlay != null)
+            {
+                try
+                {
+                    _overlay.Close();
+                    _overlay.Dispose();
+                }
+                catch
+                {
+                }
+                _overlay = null;
+            }
+
             if (_provider != null)
             {
                 _provider.Dispose();
@@ -165,6 +180,7 @@ namespace Berlit
             StyleButton(buttonExpandAll);
             StyleButton(buttonCollapseAll);
             StyleButton(buttonRefresh);
+            StyleButton(buttonOverlay);
 
             labelUpdated.Font = Fonts.Small;
             labelUpdated.ForeColor = Theme.TextDim;
@@ -386,6 +402,9 @@ namespace Berlit
                 labelStatus.Text = _provider.Status;
                 labelStatus.ForeColor = Theme.TextDim;
                 labelSummary.Text = _provider.Summary;
+
+                if (_overlay != null) _overlay.UpdateSnapshot(_provider.GetHudSnapshot());
+
                 _hardwareStamp = DateTime.Now;
             }
             catch (Exception ex)
@@ -707,6 +726,35 @@ namespace Berlit
         private void buttonRefresh_Click(object sender, EventArgs e)
         {
             RefreshActiveTab(true);
+        }
+
+        private void buttonOverlay_Click(object sender, EventArgs e)
+        {
+            if (_overlay == null)
+            {
+                var hud = new HudForm();
+                _overlay = hud;
+
+                hud.FormClosed += delegate
+                {
+                    if (_overlay == hud) _overlay = null;
+                    if (!IsDisposed)
+                    {
+                        buttonOverlay.Text = "Overlay: off";
+                        buttonOverlay.ForeColor = Theme.Text;
+                    }
+                };
+
+                hud.Show();
+                buttonOverlay.Text = "Overlay: on";
+                buttonOverlay.ForeColor = Theme.Accent;
+
+                if (_provider != null) hud.UpdateSnapshot(_provider.GetHudSnapshot());
+            }
+            else
+            {
+                _overlay.Close();
+            }
         }
 
         private static bool Contains(string text, string filter)

@@ -37,5 +37,8 @@ namespace Berlit
 
         /// <summary>Короткая сводка для статус-бара: загрузка CPU, память, GPU.</summary>
         string Summary { get; }
+
+        /// <summary>Компактный снимок для оверлея поверх всех окон.</summary>
+        HudSnapshot GetHudSnapshot();
     }
 }

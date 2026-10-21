@@ -35,6 +35,7 @@ namespace Berlit
             this.panelSearch = new System.Windows.Forms.Panel();
             this.labelSearchHint = new System.Windows.Forms.Label();
             this.textBoxSearch = new System.Windows.Forms.TextBox();
+            this.buttonOverlay = new System.Windows.Forms.Button();
             this.labelSubtitle = new System.Windows.Forms.Label();
             this.labelTitle = new System.Windows.Forms.Label();
             this.tabControl1 = new DarkTabControl();
@@ -73,6 +74,7 @@ namespace Berlit
             // panelTop
             // 
             this.panelTop.Controls.Add(this.panelSearch);
+            this.panelTop.Controls.Add(this.buttonOverlay);
             this.panelTop.Controls.Add(this.labelSubtitle);
             this.panelTop.Controls.Add(this.labelTitle);
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
@@ -80,6 +82,17 @@ namespace Berlit
             this.panelTop.Name = "panelTop";
             this.panelTop.Size = new System.Drawing.Size(1240, 52);
             this.panelTop.TabIndex = 1;
+            // 
+            // buttonOverlay
+            // 
+            this.buttonOverlay.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.buttonOverlay.Location = new System.Drawing.Point(802, 11);
+            this.buttonOverlay.Name = "buttonOverlay";
+            this.buttonOverlay.Size = new System.Drawing.Size(112, 30);
+            this.buttonOverlay.TabIndex = 3;
+            this.buttonOverlay.Text = "Overlay: off";
+            this.buttonOverlay.UseVisualStyleBackColor = false;
+            this.buttonOverlay.Click += new System.EventHandler(this.buttonOverlay_Click);
             // 
             // labelTitle
             // 
@@ -387,6 +400,7 @@ namespace Berlit
         private System.Windows.Forms.Panel panelSearch;
         private System.Windows.Forms.TextBox textBoxSearch;
         private System.Windows.Forms.Label labelSearchHint;
+        private System.Windows.Forms.Button buttonOverlay;
         private DarkTabControl tabControl1;
         private System.Windows.Forms.TabPage tabPageMonitoringPC;
         private HwTreeGrid hwTree;

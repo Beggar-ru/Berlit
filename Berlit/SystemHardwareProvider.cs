@@ -59,6 +59,7 @@ namespace Berlit
 
         private string _status = "Starting...";
         private string _summary = string.Empty;
+        private HudSnapshot _hud = new HudSnapshot();
 
         private sealed class Range
         {
@@ -217,6 +218,30 @@ namespace Berlit
                     }
                 }
             }
+
+            double? gpuTemp = null;
+            foreach (HardwareReadings hardware in _lhmReadings)
+            {
+                if (hardware.Type != HardwareType.GpuIntel &&
+                    hardware.Type != HardwareType.GpuNvidia &&
+                    hardware.Type != HardwareType.GpuAmd) continue;
+
+                SensorReading core = FindSensor(hardware, SensorType.Temperature, "GPU Core");
+                if (!IsMeasured(core)) continue;
+
+                gpuTemp = core.Value.Value;
+                break;
+            }
+
+            _hud = new HudSnapshot
+            {
+                CpuLoad = _cpuLoad,
+                CpuTemp = double.IsNaN(_cpuPackageTemp) ? (double?)null : _cpuPackageTemp,
+                HasGpu = _adapters.Count > 0,
+                GpuLoad = _adapters.Count > 0 ? (double?)_gpuLoad : null,
+                GpuTemp = gpuTemp,
+                RamPercent = _ramTotalGb > 0 ? _ramUsedGb / _ramTotalGb * 100.0 : 0
+            };
         }
 
         private void EnsureWmiData()
@@ -283,6 +308,11 @@ namespace Berlit
         public string Status { get { return _status; } }
 
         public string Summary { get { return _summary; } }
+
+        public HudSnapshot GetHudSnapshot()
+        {
+            return _hud;
+        }
 
         public IList<HwNode> GetSystemNodes()
         {

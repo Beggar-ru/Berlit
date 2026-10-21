@@ -74,6 +74,9 @@
          при определённом BERLIT_DEMO (см. шапку самого файла). -->
     <Compile Include="DemoHardwareProvider.cs" />
     <Compile Include="DxgiAdapters.cs" />
+    <Compile Include="FpsMeter.cs" />
+    <Compile Include="HudForm.cs" />
+    <Compile Include="HudSnapshot.cs" />
     <Compile Include="HwNode.cs" />
     <Compile Include="HwTreeGrid.cs">
       <SubType>Component</SubType>
@@ -122,6 +125,8 @@
          0.9.4 — последняя версия со встроенным драйвером WinRing0: не требует
          отдельной установки PawnIO, достаточно прав администратора. -->
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
+    <!-- ETW-события Present для счётчика FPS оверлея (как в PresentMon). -->
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.16" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

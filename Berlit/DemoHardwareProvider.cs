@@ -23,6 +23,19 @@ namespace Berlit
 
         public string Summary { get { return "CPU 12 %     RAM 11.2 / 32.0 GB     GPU 18 %"; } }
 
+        public HudSnapshot GetHudSnapshot()
+        {
+            return new HudSnapshot
+            {
+                CpuLoad = 12,
+                CpuTemp = 45,
+                HasGpu = true,
+                GpuLoad = 18,
+                GpuTemp = 52,
+                RamPercent = 35
+            };
+        }
+
         private double Jitter(double baseValue, double amplitude)
         {
             return baseValue + (_rnd.NextDouble() * 2 - 1) * amplitude;
