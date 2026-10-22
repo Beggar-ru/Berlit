@@ -39,7 +39,8 @@ namespace Berlit
         public const int Voltage = 6;
         public const int Power = 7;
         public const int Info = 8;      // текст: объём, модель, статус
-        public const int Count = 9;
+        public const int MemClock = 9;  // частота памяти видеокарты
+        public const int Count = 10;
     }
 
     /// <summary>
@@ -63,6 +64,9 @@ namespace Berlit
         public HwNodeKind Kind { get; set; }
         public bool Expanded { get; set; }
         public HwNode Parent { get; private set; }
+
+        /// <summary>Колонки раздела: каждый верхний раздел задаёт свой набор и порядок.</summary>
+        public List<HwColumnDef> Columns { get; set; }
 
         public IList<HwNode> Children { get { return _children; } }
         public bool HasChildren { get { return _children.Count > 0; } }

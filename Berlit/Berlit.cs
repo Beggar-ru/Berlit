@@ -73,7 +73,6 @@ namespace Berlit
         private void Berlit_Load(object sender, EventArgs e)
         {
             ApplyTheme();
-            BuildHardwareColumns();
             BuildGridColumns();
 
             try
@@ -182,6 +181,14 @@ namespace Berlit
 
             tabControl1.BackColor = Theme.Back;
             foreach (TabPage page in tabControl1.TabPages)
+            {
+                page.BackColor = Theme.Surface;
+                page.ForeColor = Theme.Text;
+            }
+
+            // Внутренние вкладки SYSTEM INFO: без белой рамки вокруг страниц.
+            tabInfo.BackColor = Theme.Surface;
+            foreach (TabPage page in tabInfo.TabPages)
             {
                 page.BackColor = Theme.Surface;
                 page.ForeColor = Theme.Text;
@@ -332,22 +339,61 @@ namespace Berlit
         // Колонки
         // ==================================================================
 
-        private void BuildHardwareColumns()
+        // У каждого раздела свой набор и порядок колонок — как в HWMonitor.
+        private static readonly HwColumnDef[] SystemColumns =
         {
-            hwTree.NameHeader = "Sensor";
-            hwTree.SetColumns(new[]
-            {
-                new HwColumnDef("Load", 74, HorizontalAlignment.Right, false, true),
-                new HwColumnDef("Min", 62, HorizontalAlignment.Right),
-                new HwColumnDef("Temp", 64, HorizontalAlignment.Right, true),
-                new HwColumnDef("Max", 62, HorizontalAlignment.Right),
-                new HwColumnDef("Fan", 58, HorizontalAlignment.Right),
-                new HwColumnDef("Clock", 76, HorizontalAlignment.Right),
-                new HwColumnDef("Voltage", 72, HorizontalAlignment.Right),
-                new HwColumnDef("Power", 68, HorizontalAlignment.Right),
-                new HwColumnDef("Info / status", 200, HorizontalAlignment.Left)
-            });
-        }
+            new HwColumnDef(HwCol.Info, "Details", 0, HorizontalAlignment.Left)
+        };
+
+        private static readonly HwColumnDef[] CpuColumns =
+        {
+            new HwColumnDef(HwCol.Load, "Load", 78, HorizontalAlignment.Right, false, true),
+            new HwColumnDef(HwCol.Temp, "Temp", 70, HorizontalAlignment.Right, true),
+            new HwColumnDef(HwCol.TempMin, "Min", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.TempMax, "Max", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Clock, "Core clock", 104, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Voltage, "Voltage", 82, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Power, "Power", 78, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Info, "Info", 0, HorizontalAlignment.Left)
+        };
+
+        private static readonly HwColumnDef[] MemoryColumns =
+        {
+            new HwColumnDef(HwCol.Load, "Load", 78, HorizontalAlignment.Right, false, true),
+            new HwColumnDef(HwCol.Info, "Used / total", 0, HorizontalAlignment.Left)
+        };
+
+        private static readonly HwColumnDef[] GpuColumns =
+        {
+            new HwColumnDef(HwCol.Load, "Load", 78, HorizontalAlignment.Right, false, true),
+            new HwColumnDef(HwCol.Temp, "Temp", 70, HorizontalAlignment.Right, true),
+            new HwColumnDef(HwCol.TempMin, "Min", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.TempMax, "Max", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Clock, "Core clock", 104, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.MemClock, "Mem clock", 104, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.FanRpm, "Fan", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Power, "Power", 78, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Info, "Info", 0, HorizontalAlignment.Left)
+        };
+
+        private static readonly HwColumnDef[] StorageColumns =
+        {
+            new HwColumnDef(HwCol.Load, "Load", 78, HorizontalAlignment.Right, false, true),
+            new HwColumnDef(HwCol.Temp, "Temp", 70, HorizontalAlignment.Right, true),
+            new HwColumnDef(HwCol.TempMin, "Min", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.TempMax, "Max", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Info, "Info", 0, HorizontalAlignment.Left)
+        };
+
+        private static readonly HwColumnDef[] BoardColumns =
+        {
+            new HwColumnDef(HwCol.Temp, "Temp", 70, HorizontalAlignment.Right, true),
+            new HwColumnDef(HwCol.TempMin, "Min", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.TempMax, "Max", 66, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Voltage, "Voltage", 90, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.FanRpm, "Fan", 80, HorizontalAlignment.Right),
+            new HwColumnDef(HwCol.Info, "Info", 0, HorizontalAlignment.Left)
+        };
 
         private void BuildGridColumns()
         {
@@ -527,18 +573,23 @@ namespace Berlit
         private IList<HwNode> BuildHardwareTree()
         {
             var groups = new List<HwNode>();
-            AddGroup(groups, "SYSTEM", ReadGroup(_provider.GetSystemNodes));
-            AddGroup(groups, "CPU", ReadGroup(_provider.GetCpuNodes));
-            AddGroup(groups, "MEMORY", ReadGroup(_provider.GetMemoryNodes));
-            AddGroup(groups, "GRAPHICS", ReadGroup(_provider.GetGpuNodes));
-            AddGroup(groups, "STORAGE", ReadGroup(_provider.GetStorageNodes));
-            AddGroup(groups, "MAINBOARD", ReadGroup(_provider.GetMainboardNodes));
+            AddGroup(groups, "SYSTEM", ReadGroup(_provider.GetSystemNodes), SystemColumns);
+            AddGroup(groups, "CPU", ReadGroup(_provider.GetCpuNodes), CpuColumns);
+            AddGroup(groups, "MEMORY", ReadGroup(_provider.GetMemoryNodes), MemoryColumns);
+            AddGroup(groups, "GRAPHICS", ReadGroup(_provider.GetGpuNodes), GpuColumns);
+            AddGroup(groups, "STORAGE", ReadGroup(_provider.GetStorageNodes), StorageColumns);
+            AddGroup(groups, "MAINBOARD", ReadGroup(_provider.GetMainboardNodes), BoardColumns);
             return groups;
         }
 
-        private static void AddGroup(List<HwNode> groups, string title, IList<HwNode> children)
+        private static void AddGroup(List<HwNode> groups, string title, IList<HwNode> children,
+                                     IEnumerable<HwColumnDef> columns)
         {
-            var group = new HwNode(title, HwNodeKind.Group) { Expanded = true };
+            var group = new HwNode(title, HwNodeKind.Group)
+            {
+                Expanded = true,
+                Columns = new List<HwColumnDef>(columns)
+            };
             group.AddRange(children);
             groups.Add(group);
         }

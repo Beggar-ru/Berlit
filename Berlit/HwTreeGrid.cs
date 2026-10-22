@@ -10,9 +10,10 @@ namespace Berlit
 {
     public sealed class HwColumnDef
     {
-        public HwColumnDef(string header, int width, HorizontalAlignment align,
+        public HwColumnDef(int key, string header, int width, HorizontalAlignment align,
                            bool accent = false, bool bar = false)
         {
+            Key = key;
             Header = header;
             Width = width;
             Align = align;
@@ -20,6 +21,7 @@ namespace Berlit
             Bar = bar;
         }
 
+        public int Key { get; private set; }          // индекс значения в HwNode
         public string Header { get; private set; }
         public int Width { get; private set; }
         public HorizontalAlignment Align { get; private set; }
@@ -36,21 +38,17 @@ namespace Berlit
     public class HwTreeGrid : Control
     {
         private const int MinNameWidth = 200;
-        private const int HeaderHeight = 27;
         private const int RowHeight = 24;
         private const int Indent = 22;
 
         private readonly List<HwNode> _roots = new List<HwNode>();
         private readonly List<HwNode> _rows = new List<HwNode>();
-        private readonly List<HwColumnDef> _cols = new List<HwColumnDef>();
         private readonly DarkScrollBar _scroll = new DarkScrollBar();
 
         private string _filter = string.Empty;
         private HwNode _selected;
         private int _hoverRow = -1;
         private bool _hasData;
-        private int _nameWidth;
-        private int[] _widths = new int[0];
 
         public HwTreeGrid()
         {
@@ -68,8 +66,7 @@ namespace Berlit
             Controls.Add(_scroll);
         }
 
-        [DefaultValue("Sensor")]
-        public string NameHeader { get; set; } = "Sensor";
+        // ---------- public API ----------
 
         [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string FilterText
@@ -85,16 +82,6 @@ namespace Berlit
 
         [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public HwNode SelectedNode { get { return _selected; } }
-
-        // ---------- public API ----------
-
-        public void SetColumns(IEnumerable<HwColumnDef> columns)
-        {
-            _cols.Clear();
-            _cols.AddRange(columns);
-            _widths = new int[_cols.Count];
-            Invalidate();
-        }
 
         /// <summary>
         /// Заменяет дерево новыми данными. Состояние раскрытия и выделение
@@ -213,7 +200,7 @@ namespace Berlit
 
         private int VisibleRows
         {
-            get { return Math.Max(1, (Height - HeaderHeight) / RowHeight); }
+            get { return Math.Max(1, Height / RowHeight); }
         }
 
         private int ContentWidth
@@ -262,32 +249,32 @@ namespace Berlit
 
         // ---------- layout / metrics ----------
 
-        private static int NameWidth(int contentWidth, IList<HwColumnDef> cols)
+        private static int NameWidth(int contentWidth)
         {
-            int fixedWidth = 0;
-            for (int i = 0; i < cols.Count - 1; i++) fixedWidth += cols[i].Width;
-
             int name = (int)Math.Round(contentWidth * 0.30);
-            name = Math.Max(MinNameWidth, Math.Min(380, name));
-
-            int info = contentWidth - name - fixedWidth;
-            if (info < 120) name = Math.Max(MinNameWidth, name - (120 - info));
-            return name;
+            return Math.Max(MinNameWidth, Math.Min(380, name));
         }
 
-        private void LayoutColumns(int contentWidth)
+        private static int[] WidthsFor(IList<HwColumnDef> cols, int contentWidth, int nameWidth)
         {
-            _nameWidth = NameWidth(contentWidth, _cols);
-            if (_widths.Length != _cols.Count) _widths = new int[_cols.Count];
+            if (cols == null || cols.Count == 0) return new int[0];
 
+            int[] widths = new int[cols.Count];
             int used = 0;
-            for (int i = 0; i < _cols.Count - 1; i++)
+            for (int i = 0; i < cols.Count - 1; i++)
             {
-                _widths[i] = _cols[i].Width;
-                used += _widths[i];
+                widths[i] = cols[i].Width;
+                used += widths[i];
             }
-            if (_cols.Count > 0)
-                _widths[_cols.Count - 1] = Math.Max(60, contentWidth - _nameWidth - used);
+            widths[cols.Count - 1] = Math.Max(80, contentWidth - nameWidth - used);
+            return widths;
+        }
+
+        private static IList<HwColumnDef> ColumnsFor(HwNode node)
+        {
+            for (HwNode n = node; n != null; n = n.Parent)
+                if (n.Columns != null && n.Columns.Count > 0) return n.Columns;
+            return null;
         }
 
         private static TextFormatFlags Flags(HorizontalAlignment align)
@@ -309,23 +296,17 @@ namespace Berlit
             Graphics g = e.Graphics;
             g.Clear(BackColor);
 
-            if (_cols.Count == 0) return;
-
             int contentWidth = ContentWidth;
-            LayoutColumns(contentWidth);
-
-            DrawHeader(g, contentWidth);
-
+            int nameWidth = NameWidth(contentWidth);
             int visible = VisibleRows;
             int first = _scroll.Visible ? _scroll.Value : 0;
+
             for (int i = 0; i < visible; i++)
             {
                 int index = first + i;
                 if (index >= _rows.Count) break;
-                DrawRow(g, _rows[index], index, HeaderHeight + i * RowHeight, contentWidth);
+                DrawRow(g, _rows[index], index, i * RowHeight, contentWidth, nameWidth);
             }
-
-            DrawColumnLines(g);
 
             if (_rows.Count == 0)
             {
@@ -333,59 +314,12 @@ namespace Berlit
                                   ? "No matches for \u00AB" + _filter + "\u00BB"
                                   : (_hasData ? "No sensors" : "Reading hardware...");
                 TextRenderer.DrawText(g, text, Font,
-                    new Rectangle(0, HeaderHeight, contentWidth, Math.Max(0, Height - HeaderHeight)),
-                    Theme.TextFaint,
+                    new Rectangle(0, 0, contentWidth, Height), Theme.TextFaint,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
             }
         }
 
-        private void DrawHeader(Graphics g, int contentWidth)
-        {
-            using (var back = new SolidBrush(Theme.SurfaceAlt))
-                g.FillRectangle(back, 0, 0, Width, HeaderHeight);
-
-            TextRenderer.DrawText(g, NameHeader, Fonts.Header,
-                new Rectangle(10, 0, Math.Max(0, _nameWidth - 12), HeaderHeight),
-                Theme.TextDim, Flags(HorizontalAlignment.Left));
-
-            int x = _nameWidth;
-            for (int i = 0; i < _cols.Count; i++)
-            {
-                HwColumnDef column = _cols[i];
-                int pad = column.Align == HorizontalAlignment.Left ? 8 : 0;
-                TextRenderer.DrawText(g, column.Header, Fonts.Header,
-                    new Rectangle(x + pad, 0, Math.Max(0, _widths[i] - pad), HeaderHeight), Theme.TextDim, Flags(column.Align));
-                x += _widths[i];
-            }
-
-            using (var pen = new Pen(Theme.Accent, 2))
-                g.DrawLine(pen, 0, HeaderHeight - 1, contentWidth, HeaderHeight - 1);
-
-            using (var pen = new Pen(Theme.GridLine))
-            {
-                x = _nameWidth;
-                for (int i = 0; i < _cols.Count - 1; i++)
-                {
-                    x += _widths[i];
-                    g.DrawLine(pen, x, 6, x, HeaderHeight - 4);
-                }
-            }
-        }
-
-        private void DrawColumnLines(Graphics g)
-        {
-            using (var pen = new Pen(Theme.GridLine))
-            {
-                int x = _nameWidth;
-                for (int i = 0; i < _cols.Count - 1; i++)
-                {
-                    x += _widths[i];
-                    g.DrawLine(pen, x, HeaderHeight, x, Height);
-                }
-            }
-        }
-
-        private void DrawRow(Graphics g, HwNode node, int index, int y, int contentWidth)
+        private void DrawRow(Graphics g, HwNode node, int index, int y, int contentWidth, int nameWidth)
         {
             bool isGroup = node.Kind == HwNodeKind.Group;
             bool selected = node == _selected;
@@ -403,6 +337,9 @@ namespace Berlit
                     g.FillRectangle(brush, 0, y, 3, RowHeight);
             }
 
+            IList<HwColumnDef> cols = ColumnsFor(node) ?? EmptyColumns;
+            int[] widths = WidthsFor(cols, contentWidth, nameWidth);
+
             int x0 = 10 + node.Depth * Indent;
             if (node.HasChildren)
                 DrawGlyph(g, x0, y + RowHeight / 2, node.Expanded,
@@ -412,34 +349,64 @@ namespace Berlit
             Font font = isGroup ? Fonts.BaseBold : Font;
             Color textColor = node.Kind == HwNodeKind.Sensor ? Theme.TextSensor : Theme.Text;
             TextRenderer.DrawText(g, node.Text, font,
-                new Rectangle(textX, y, Math.Max(0, _nameWidth - textX - 6), RowHeight),
+                new Rectangle(textX, y, Math.Max(0, nameWidth - textX - 6), RowHeight),
                 textColor, Flags(HorizontalAlignment.Left));
 
-            int x = _nameWidth;
-            for (int i = 0; i < _cols.Count; i++)
+            int x = nameWidth;
+            for (int i = 0; i < cols.Count; i++)
             {
-                HwColumnDef column = _cols[i];
-                string value = node.GetValue(i);
-                if (value.Length > 0)
+                HwColumnDef column = cols[i];
+                int width = widths[i];
+
+                if (isGroup && node.Columns != null)
                 {
-                    Rectangle cell = new Rectangle(x, y, _widths[i], RowHeight);
-                    if (column.Bar) DrawBar(g, cell, value, back);
-
-                    HwLevel level = node.GetLevel(i);
-                    Color color = level != HwLevel.Normal
-                                      ? Theme.Level(level)
-                                      : (column.Accent ? Theme.Accent : Theme.Text);
-
+                    // Свой набор и порядок колонок у каждого раздела — подписи прямо в строке.
                     int pad = column.Align == HorizontalAlignment.Left ? 8 : 6;
-                    int textOffset = column.Bar ? -4 : 0;
-                    TextRenderer.DrawText(g, value, Font,
-                        new Rectangle(cell.X + pad, cell.Y + textOffset, cell.Width - pad * 2, cell.Height),
-                        color, Flags(column.Align));
+                    TextRenderer.DrawText(g, column.Header, Fonts.Header,
+                        new Rectangle(x + pad, y, Math.Max(0, width - pad * 2), RowHeight),
+                        Theme.TextFaint, Flags(column.Align));
                 }
-                x += _widths[i];
+                else
+                {
+                    string value = node.GetValue(column.Key);
+                    if (value.Length > 0)
+                    {
+                        Rectangle cell = new Rectangle(x, y, width, RowHeight);
+                        if (column.Bar) DrawBar(g, cell, value, back);
+
+                        HwLevel level = node.GetLevel(column.Key);
+                        Color color = level != HwLevel.Normal
+                                          ? Theme.Level(level)
+                                          : (column.Accent ? Theme.Accent : Theme.Text);
+
+                        int pad = column.Align == HorizontalAlignment.Left ? 8 : 6;
+                        int textOffset = column.Bar ? -4 : 0;
+                        TextRenderer.DrawText(g, value, Font,
+                            new Rectangle(cell.X + pad, cell.Y + textOffset, cell.Width - pad * 2, cell.Height),
+                            color, Flags(column.Align));
+                    }
+                }
+                x += width;
+            }
+
+            using (var pen = new Pen(Theme.GridLine))
+            {
+                int sx = nameWidth;
+                for (int i = 0; i < cols.Count - 1; i++)
+                {
+                    sx += widths[i];
+                    g.DrawLine(pen, sx, y + (isGroup ? 4 : 0), sx, y + RowHeight - (isGroup ? 4 : 0));
+                }
+            }
+
+            if (isGroup)
+            {
+                using (var pen = new Pen(Theme.Accent))
+                    g.DrawLine(pen, 0, y + RowHeight - 1, contentWidth, y + RowHeight - 1);
             }
         }
 
+        private static readonly List<HwColumnDef> EmptyColumns = new List<HwColumnDef>();
         private static void DrawBar(Graphics g, Rectangle cell, string value, Color back)
         {
             string text = value.Trim();
@@ -494,15 +461,13 @@ namespace Berlit
 
         private HwNode NodeAt(int y)
         {
-            if (y < HeaderHeight) return null;
-            int index = (_scroll.Visible ? _scroll.Value : 0) + (y - HeaderHeight) / RowHeight;
+            int index = (_scroll.Visible ? _scroll.Value : 0) + y / RowHeight;
             return index >= 0 && index < _rows.Count ? _rows[index] : null;
         }
 
         private int IndexAt(int y)
         {
-            if (y < HeaderHeight) return -1;
-            int index = (_scroll.Visible ? _scroll.Value : 0) + (y - HeaderHeight) / RowHeight;
+            int index = (_scroll.Visible ? _scroll.Value : 0) + y / RowHeight;
             return index >= 0 && index < _rows.Count ? index : -1;
         }
 

@@ -43,6 +43,7 @@ namespace Berlit
         private List<HardwareReadings> _lhmReadings = new List<HardwareReadings>();
         private int _lhmValueCount;
         private double _cpuPackageTemp = double.NaN;
+        private int _cpuTempPriority;
 
         private WmiProbe.CpuDetails _cpuDetails;
         private IList<WmiProbe.MemoryModule> _modules = new List<WmiProbe.MemoryModule>();
@@ -191,6 +192,7 @@ namespace Berlit
         {
             _lhmValueCount = 0;
             _cpuPackageTemp = double.NaN;
+            _cpuTempPriority = -1;
 
             foreach (HardwareReadings hardware in _lhmReadings)
             {
@@ -211,10 +213,17 @@ namespace Berlit
                             (sensor.Type == SensorType.Temperature || sensor.Type == SensorType.Voltage))
                             _lhmValueCount++;
 
-                        if (part.Type == HardwareType.Cpu &&
-                            sensor.Type == SensorType.Temperature &&
-                            sensor.Name.Equals("CPU Package", StringComparison.OrdinalIgnoreCase))
-                            _cpuPackageTemp = sensor.Value.Value;
+                        if (part.Type == HardwareType.Cpu && sensor.Type == SensorType.Temperature)
+                        {
+                            // Intel отдаёт «CPU Package», AMD — «Core (Tctl/Tdie)».
+                            // Берём самый приоритетный датчик, а не фиксированное имя.
+                            int priority = CpuTempPriority(sensor.Name);
+                            if (priority > _cpuTempPriority)
+                            {
+                                _cpuTempPriority = priority;
+                                _cpuPackageTemp = sensor.Value.Value;
+                            }
+                        }
                     }
                 }
             }
@@ -275,7 +284,7 @@ namespace Berlit
             if (_lhm.Available && _lhmValueCount == 0)
             {
                 _warnings.Add(Program.IsAdministrator()
-                    ? "sensor driver unavailable (blocked or unsupported)"
+                    ? "sensor driver blocked (WinRing0); PawnIO needed"
                     : "sensors need administrator rights");
             }
 
@@ -369,7 +378,7 @@ namespace Berlit
             else
                 cpu.Set(HwCol.Clock, HwFormat.Ghz(_nominalMhz), HwLevel.Dim);
 
-            SensorReading packageTemp = FindSensor(lhmCpu, SensorType.Temperature, "CPU Package");
+            SensorReading packageTemp = FindCpuTemperature(lhmCpu);
             if (IsMeasured(packageTemp))
                 ApplyTemperature(cpu, packageTemp.Value.Value, "cpu.package");
 
@@ -417,15 +426,8 @@ namespace Berlit
                     row.Set(HwCol.Voltage, HwFormat.Volt(voltage.Value.Value));
             }
 
-            if (_cpuDetails != null)
-            {
-                if (!string.IsNullOrEmpty(_cpuDetails.Socket))
-                    Sensor(cpu, "Socket").Set(HwCol.Info, _cpuDetails.Socket, HwLevel.Dim);
-                if (_cpuDetails.MaxClockMhz > 0)
-                    Sensor(cpu, "Max clock").Set(HwCol.Clock, HwFormat.Ghz(_cpuDetails.MaxClockMhz), HwLevel.Dim);
-                if (_cpuDetails.L3 > 0)
-                    Sensor(cpu, "L3 cache").Set(HwCol.Info, HwFormat.Bytes(_cpuDetails.L3), HwLevel.Dim);
-            }
+            // Socket, Max clock и L3 cache намеренно не выводятся: это дублирует
+            // SYSTEM INFO и занимает место в живой таблице.
 
             return list;
         }
@@ -513,6 +515,9 @@ namespace Berlit
 
                 SensorReading clock = FindSensor(lhmGpu, SensorType.Clock, "GPU Core");
                 if (IsMeasured(clock)) gpu.Set(HwCol.Clock, HwFormat.Ghz(clock.Value.Value));
+
+                SensorReading memClock = FindSensorContains(lhmGpu, SensorType.Clock, "memory");
+                if (IsMeasured(memClock)) gpu.Set(HwCol.MemClock, HwFormat.Ghz(memClock.Value.Value));
 
                 SensorReading voltage = FindSensor(lhmGpu, SensorType.Voltage, "GPU Core");
                 if (IsMeasured(voltage)) gpu.Set(HwCol.Voltage, HwFormat.Volt(voltage.Value.Value));
@@ -781,6 +786,53 @@ namespace Berlit
         }
 
         /// <summary>Датчик с точным именем (без учёта регистра) и измеренным значением.</summary>
+        /// <summary>Приоритет датчика температуры CPU: Intel и AMD называют их по-разному.</summary>
+        private static int CpuTempPriority(string name)
+        {
+            if (name.IndexOf("Tctl/Tdie", StringComparison.OrdinalIgnoreCase) >= 0) return 100;
+            if (name.IndexOf("Tctl", StringComparison.OrdinalIgnoreCase) >= 0) return 95;
+            if (name.IndexOf("Tdie", StringComparison.OrdinalIgnoreCase) >= 0) return 90;
+            if (name.Equals("CPU Package", StringComparison.OrdinalIgnoreCase)) return 85;
+            if (name.IndexOf("Package", StringComparison.OrdinalIgnoreCase) >= 0) return 80;
+            if (name.IndexOf("Core Average", StringComparison.OrdinalIgnoreCase) >= 0) return 75;
+            if (name.IndexOf("CPU Cores", StringComparison.OrdinalIgnoreCase) >= 0) return 72;
+            if (name.IndexOf("Core Max", StringComparison.OrdinalIgnoreCase) >= 0) return 70;
+            if (name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0) return 40;
+            return 10;
+        }
+
+        private static SensorReading FindCpuTemperature(HardwareReadings hardware)
+        {
+            if (hardware == null) return null;
+
+            SensorReading best = null;
+            int bestPriority = -1;
+            foreach (SensorReading sensor in hardware.Sensors)
+            {
+                if (sensor.Type != SensorType.Temperature || !IsMeasured(sensor) || sensor.Value.Value <= 0) continue;
+
+                int priority = CpuTempPriority(sensor.Name);
+                if (priority > bestPriority)
+                {
+                    bestPriority = priority;
+                    best = sensor;
+                }
+            }
+            return best;
+        }
+
+        private static SensorReading FindSensorContains(HardwareReadings hardware, SensorType type, string part)
+        {
+            if (hardware == null) return null;
+
+            foreach (SensorReading sensor in hardware.Sensors)
+            {
+                if (sensor.Type != type || !IsMeasured(sensor)) continue;
+                if (sensor.Name.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0) return sensor;
+            }
+            return null;
+        }
+
         private static SensorReading FindSensor(HardwareReadings hardware, SensorType type, string name)
         {
             if (hardware == null) return null;
@@ -821,9 +873,14 @@ namespace Berlit
 
         private static int ParseCoreNumber(string name)
         {
-            if (!name.StartsWith("CPU Core #", StringComparison.OrdinalIgnoreCase)) return -1;
+            // Intel: «CPU Core #N», AMD: «Core #N». GPU и потоки не трогаем.
+            if (name.IndexOf("GPU", StringComparison.OrdinalIgnoreCase) >= 0) return -1;
+            if (name.IndexOf("Thread", StringComparison.OrdinalIgnoreCase) >= 0) return -1;
+            if (name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) < 0) return -1;
 
             int hash = name.IndexOf('#');
+            if (hash < 0) return -1;
+
             int value = 0;
             bool any = false;
             for (int i = hash + 1; i < name.Length && char.IsDigit(name[i]); i++)
