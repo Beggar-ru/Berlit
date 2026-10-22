@@ -11,6 +11,8 @@ namespace Berlit
         public string Name = string.Empty;
         public uint VendorId;
         public uint DeviceId;
+        public uint SubSysId;
+        public uint Revision;
         public long DedicatedVideoMemory;
         public long SharedSystemMemory;
 
@@ -134,6 +136,8 @@ namespace Berlit
                         if (info.Name.Length == 0) info.Name = "GPU";
                         info.VendorId = desc.VendorId;
                         info.DeviceId = desc.DeviceId;
+                        info.SubSysId = desc.SubSysId;
+                        info.Revision = desc.Revision;
                         info.DedicatedVideoMemory = (long)desc.DedicatedVideoMemory.ToUInt64();
                         info.SharedSystemMemory = (long)desc.SharedSystemMemory.ToUInt64();
                         info.Luid = ((long)(uint)desc.AdapterLuid.HighPart << 32) | desc.AdapterLuid.LowPart;

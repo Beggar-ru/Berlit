@@ -51,6 +51,23 @@ namespace Berlit
             this.panelServicesToolbar = new System.Windows.Forms.Panel();
             this.checkRunningOnly = new DarkCheckBox();
             this.labelServicesSummary = new System.Windows.Forms.Label();
+            this.tabPageSystemInfo = new System.Windows.Forms.TabPage();
+            this.panelInfoToolbar = new System.Windows.Forms.Panel();
+            this.labelInfoSummary = new System.Windows.Forms.Label();
+            this.labelInfoUpdated = new System.Windows.Forms.Label();
+            this.buttonInfoRefresh = new System.Windows.Forms.Button();
+            this.buttonInfoCopy = new System.Windows.Forms.Button();
+            this.tabInfo = new DarkTabControl();
+            this.tabInfoCpu = new System.Windows.Forms.TabPage();
+            this.tabInfoGpu = new System.Windows.Forms.TabPage();
+            this.tabInfoRam = new System.Windows.Forms.TabPage();
+            this.tabInfoMainboard = new System.Windows.Forms.TabPage();
+            this.tabInfoStorage = new System.Windows.Forms.TabPage();
+            this.infoPanelCpu = new InfoPanel();
+            this.infoPanelGpu = new InfoPanel();
+            this.infoPanelRam = new InfoPanel();
+            this.infoPanelMainboard = new InfoPanel();
+            this.infoPanelStorage = new InfoPanel();
             this.tabPageProcesses = new System.Windows.Forms.TabPage();
             this.dataGridProcesses = new DataTableGrid();
             this.panelProcessesToolbar = new System.Windows.Forms.Panel();
@@ -64,6 +81,14 @@ namespace Berlit
             this.tabControl1.SuspendLayout();
             this.tabPageMonitoringPC.SuspendLayout();
             this.panelPcToolbar.SuspendLayout();
+            this.tabPageSystemInfo.SuspendLayout();
+            this.panelInfoToolbar.SuspendLayout();
+            this.tabInfo.SuspendLayout();
+            this.tabInfoCpu.SuspendLayout();
+            this.tabInfoGpu.SuspendLayout();
+            this.tabInfoRam.SuspendLayout();
+            this.tabInfoMainboard.SuspendLayout();
+            this.tabInfoStorage.SuspendLayout();
             this.tabPageMonitoringServices.SuspendLayout();
             this.panelServicesToolbar.SuspendLayout();
             this.tabPageProcesses.SuspendLayout();
@@ -150,6 +175,7 @@ namespace Berlit
             // tabControl1
             // 
             this.tabControl1.Controls.Add(this.tabPageMonitoringPC);
+            this.tabControl1.Controls.Add(this.tabPageSystemInfo);
             this.tabControl1.Controls.Add(this.tabPageMonitoringServices);
             this.tabControl1.Controls.Add(this.tabPageProcesses);
             this.tabControl1.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -231,6 +257,179 @@ namespace Berlit
             this.hwTree.Name = "hwTree";
             this.hwTree.Size = new System.Drawing.Size(1230, 638);
             this.hwTree.TabIndex = 1;
+            // 
+            // tabPageSystemInfo
+            // 
+            this.tabPageSystemInfo.Controls.Add(this.tabInfo);
+            this.tabPageSystemInfo.Controls.Add(this.panelInfoToolbar);
+            this.tabPageSystemInfo.Location = new System.Drawing.Point(4, 38);
+            this.tabPageSystemInfo.Name = "tabPageSystemInfo";
+            this.tabPageSystemInfo.Padding = new System.Windows.Forms.Padding(1);
+            this.tabPageSystemInfo.Size = new System.Drawing.Size(1232, 678);
+            this.tabPageSystemInfo.TabIndex = 3;
+            this.tabPageSystemInfo.Text = "SYSTEM INFO";
+            this.tabPageSystemInfo.UseVisualStyleBackColor = false;
+            // 
+            // panelInfoToolbar
+            // 
+            this.panelInfoToolbar.Controls.Add(this.labelInfoUpdated);
+            this.panelInfoToolbar.Controls.Add(this.labelInfoSummary);
+            this.panelInfoToolbar.Controls.Add(this.buttonInfoCopy);
+            this.panelInfoToolbar.Controls.Add(this.buttonInfoRefresh);
+            this.panelInfoToolbar.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panelInfoToolbar.Location = new System.Drawing.Point(1, 1);
+            this.panelInfoToolbar.Name = "panelInfoToolbar";
+            this.panelInfoToolbar.Size = new System.Drawing.Size(1230, 38);
+            this.panelInfoToolbar.TabIndex = 0;
+            // 
+            // buttonInfoRefresh
+            // 
+            this.buttonInfoRefresh.Location = new System.Drawing.Point(12, 7);
+            this.buttonInfoRefresh.Name = "buttonInfoRefresh";
+            this.buttonInfoRefresh.Size = new System.Drawing.Size(96, 24);
+            this.buttonInfoRefresh.TabIndex = 0;
+            this.buttonInfoRefresh.Text = "Refresh";
+            this.buttonInfoRefresh.UseVisualStyleBackColor = false;
+            this.buttonInfoRefresh.Click += new System.EventHandler(this.buttonInfoRefresh_Click);
+            // 
+            // buttonInfoCopy
+            // 
+            this.buttonInfoCopy.Location = new System.Drawing.Point(116, 7);
+            this.buttonInfoCopy.Name = "buttonInfoCopy";
+            this.buttonInfoCopy.Size = new System.Drawing.Size(80, 24);
+            this.buttonInfoCopy.TabIndex = 1;
+            this.buttonInfoCopy.Text = "Copy";
+            this.buttonInfoCopy.UseVisualStyleBackColor = false;
+            this.buttonInfoCopy.Click += new System.EventHandler(this.buttonInfoCopy_Click);
+            // 
+            // labelInfoSummary
+            // 
+            this.labelInfoSummary.AutoSize = true;
+            this.labelInfoSummary.Location = new System.Drawing.Point(212, 12);
+            this.labelInfoSummary.Name = "labelInfoSummary";
+            this.labelInfoSummary.Size = new System.Drawing.Size(180, 15);
+            this.labelInfoSummary.TabIndex = 2;
+            this.labelInfoSummary.Text = "Detailed hardware information";
+            // 
+            // labelInfoUpdated
+            // 
+            this.labelInfoUpdated.Dock = System.Windows.Forms.DockStyle.Right;
+            this.labelInfoUpdated.Location = new System.Drawing.Point(980, 0);
+            this.labelInfoUpdated.Name = "labelInfoUpdated";
+            this.labelInfoUpdated.Padding = new System.Windows.Forms.Padding(0, 0, 14, 0);
+            this.labelInfoUpdated.Size = new System.Drawing.Size(250, 38);
+            this.labelInfoUpdated.TabIndex = 3;
+            this.labelInfoUpdated.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // tabInfo
+            // 
+            this.tabInfo.Compact = true;
+            this.tabInfo.Controls.Add(this.tabInfoCpu);
+            this.tabInfo.Controls.Add(this.tabInfoGpu);
+            this.tabInfo.Controls.Add(this.tabInfoRam);
+            this.tabInfo.Controls.Add(this.tabInfoMainboard);
+            this.tabInfo.Controls.Add(this.tabInfoStorage);
+            this.tabInfo.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tabInfo.Location = new System.Drawing.Point(1, 39);
+            this.tabInfo.Name = "tabInfo";
+            this.tabInfo.SelectedIndex = 0;
+            this.tabInfo.Size = new System.Drawing.Size(1230, 638);
+            this.tabInfo.TabIndex = 1;
+            // 
+            // tabInfoCpu
+            // 
+            this.tabInfoCpu.Controls.Add(this.infoPanelCpu);
+            this.tabInfoCpu.Location = new System.Drawing.Point(4, 32);
+            this.tabInfoCpu.Name = "tabInfoCpu";
+            this.tabInfoCpu.Padding = new System.Windows.Forms.Padding(1);
+            this.tabInfoCpu.Size = new System.Drawing.Size(1222, 602);
+            this.tabInfoCpu.TabIndex = 0;
+            this.tabInfoCpu.Text = "CPU";
+            this.tabInfoCpu.UseVisualStyleBackColor = false;
+            // 
+            // infoPanelCpu
+            // 
+            this.infoPanelCpu.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.infoPanelCpu.Location = new System.Drawing.Point(1, 1);
+            this.infoPanelCpu.Name = "infoPanelCpu";
+            this.infoPanelCpu.Size = new System.Drawing.Size(1220, 600);
+            this.infoPanelCpu.TabIndex = 0;
+            // 
+            // tabInfoGpu
+            // 
+            this.tabInfoGpu.Controls.Add(this.infoPanelGpu);
+            this.tabInfoGpu.Location = new System.Drawing.Point(4, 32);
+            this.tabInfoGpu.Name = "tabInfoGpu";
+            this.tabInfoGpu.Padding = new System.Windows.Forms.Padding(1);
+            this.tabInfoGpu.Size = new System.Drawing.Size(1222, 602);
+            this.tabInfoGpu.TabIndex = 1;
+            this.tabInfoGpu.Text = "GPU";
+            this.tabInfoGpu.UseVisualStyleBackColor = false;
+            // 
+            // infoPanelGpu
+            // 
+            this.infoPanelGpu.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.infoPanelGpu.Location = new System.Drawing.Point(1, 1);
+            this.infoPanelGpu.Name = "infoPanelGpu";
+            this.infoPanelGpu.Size = new System.Drawing.Size(1220, 600);
+            this.infoPanelGpu.TabIndex = 0;
+            // 
+            // tabInfoRam
+            // 
+            this.tabInfoRam.Controls.Add(this.infoPanelRam);
+            this.tabInfoRam.Location = new System.Drawing.Point(4, 32);
+            this.tabInfoRam.Name = "tabInfoRam";
+            this.tabInfoRam.Padding = new System.Windows.Forms.Padding(1);
+            this.tabInfoRam.Size = new System.Drawing.Size(1222, 602);
+            this.tabInfoRam.TabIndex = 2;
+            this.tabInfoRam.Text = "RAM";
+            this.tabInfoRam.UseVisualStyleBackColor = false;
+            // 
+            // infoPanelRam
+            // 
+            this.infoPanelRam.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.infoPanelRam.Location = new System.Drawing.Point(1, 1);
+            this.infoPanelRam.Name = "infoPanelRam";
+            this.infoPanelRam.Size = new System.Drawing.Size(1220, 600);
+            this.infoPanelRam.TabIndex = 0;
+            // 
+            // tabInfoMainboard
+            // 
+            this.tabInfoMainboard.Controls.Add(this.infoPanelMainboard);
+            this.tabInfoMainboard.Location = new System.Drawing.Point(4, 32);
+            this.tabInfoMainboard.Name = "tabInfoMainboard";
+            this.tabInfoMainboard.Padding = new System.Windows.Forms.Padding(1);
+            this.tabInfoMainboard.Size = new System.Drawing.Size(1222, 602);
+            this.tabInfoMainboard.TabIndex = 3;
+            this.tabInfoMainboard.Text = "MAINBOARD";
+            this.tabInfoMainboard.UseVisualStyleBackColor = false;
+            // 
+            // infoPanelMainboard
+            // 
+            this.infoPanelMainboard.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.infoPanelMainboard.Location = new System.Drawing.Point(1, 1);
+            this.infoPanelMainboard.Name = "infoPanelMainboard";
+            this.infoPanelMainboard.Size = new System.Drawing.Size(1220, 600);
+            this.infoPanelMainboard.TabIndex = 0;
+            // 
+            // tabInfoStorage
+            // 
+            this.tabInfoStorage.Controls.Add(this.infoPanelStorage);
+            this.tabInfoStorage.Location = new System.Drawing.Point(4, 32);
+            this.tabInfoStorage.Name = "tabInfoStorage";
+            this.tabInfoStorage.Padding = new System.Windows.Forms.Padding(1);
+            this.tabInfoStorage.Size = new System.Drawing.Size(1222, 602);
+            this.tabInfoStorage.TabIndex = 4;
+            this.tabInfoStorage.Text = "STORAGE";
+            this.tabInfoStorage.UseVisualStyleBackColor = false;
+            // 
+            // infoPanelStorage
+            // 
+            this.infoPanelStorage.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.infoPanelStorage.Location = new System.Drawing.Point(1, 1);
+            this.infoPanelStorage.Name = "infoPanelStorage";
+            this.infoPanelStorage.Size = new System.Drawing.Size(1220, 600);
+            this.infoPanelStorage.TabIndex = 0;
             // 
             // tabPageMonitoringServices
             // 
@@ -381,6 +580,15 @@ namespace Berlit
             this.tabPageMonitoringPC.ResumeLayout(false);
             this.panelPcToolbar.ResumeLayout(false);
             this.panelPcToolbar.PerformLayout();
+            this.tabPageSystemInfo.ResumeLayout(false);
+            this.panelInfoToolbar.ResumeLayout(false);
+            this.panelInfoToolbar.PerformLayout();
+            this.tabInfo.ResumeLayout(false);
+            this.tabInfoCpu.ResumeLayout(false);
+            this.tabInfoGpu.ResumeLayout(false);
+            this.tabInfoRam.ResumeLayout(false);
+            this.tabInfoMainboard.ResumeLayout(false);
+            this.tabInfoStorage.ResumeLayout(false);
             this.tabPageMonitoringServices.ResumeLayout(false);
             this.panelServicesToolbar.ResumeLayout(false);
             this.panelServicesToolbar.PerformLayout();
@@ -414,6 +622,23 @@ namespace Berlit
         private System.Windows.Forms.Panel panelServicesToolbar;
         private DarkCheckBox checkRunningOnly;
         private System.Windows.Forms.Label labelServicesSummary;
+        private System.Windows.Forms.TabPage tabPageSystemInfo;
+        private System.Windows.Forms.Panel panelInfoToolbar;
+        private System.Windows.Forms.Label labelInfoSummary;
+        private System.Windows.Forms.Label labelInfoUpdated;
+        private System.Windows.Forms.Button buttonInfoRefresh;
+        private System.Windows.Forms.Button buttonInfoCopy;
+        private DarkTabControl tabInfo;
+        private System.Windows.Forms.TabPage tabInfoCpu;
+        private System.Windows.Forms.TabPage tabInfoGpu;
+        private System.Windows.Forms.TabPage tabInfoRam;
+        private System.Windows.Forms.TabPage tabInfoMainboard;
+        private System.Windows.Forms.TabPage tabInfoStorage;
+        private InfoPanel infoPanelCpu;
+        private InfoPanel infoPanelGpu;
+        private InfoPanel infoPanelRam;
+        private InfoPanel infoPanelMainboard;
+        private InfoPanel infoPanelStorage;
         private System.Windows.Forms.TabPage tabPageProcesses;
         private DataTableGrid dataGridProcesses;
         private System.Windows.Forms.Panel panelProcessesToolbar;

@@ -27,6 +27,9 @@ namespace Berlit
         private DateTime _hardwareStamp = DateTime.MinValue;
         private DateTime _servicesStamp = DateTime.MinValue;
         private DateTime _processesStamp = DateTime.MinValue;
+        private DateTime _infoStamp = DateTime.MinValue;
+        private bool _infoLoaded;
+        private bool _infoBusy;
 
         private List<ServiceEntry> _services = new List<ServiceEntry>();
         private List<ProcessEntry> _processes = new List<ProcessEntry>();
@@ -187,14 +190,22 @@ namespace Berlit
             StyleToolbar(panelPcToolbar);
             StyleToolbar(panelServicesToolbar);
             StyleToolbar(panelProcessesToolbar);
+            StyleToolbar(panelInfoToolbar);
 
             StyleButton(buttonExpandAll);
             StyleButton(buttonCollapseAll);
             StyleButton(buttonRefresh);
             StyleButton(buttonOverlay);
+            StyleButton(buttonInfoRefresh);
+            StyleButton(buttonInfoCopy);
 
             labelUpdated.Font = Fonts.Small;
             labelUpdated.ForeColor = Theme.TextDim;
+
+            labelInfoSummary.Font = Fonts.Small;
+            labelInfoSummary.ForeColor = Theme.TextDim;
+            labelInfoUpdated.Font = Fonts.Small;
+            labelInfoUpdated.ForeColor = Theme.TextDim;
 
             labelServicesSummary.Font = Fonts.Small;
             labelServicesSummary.ForeColor = Theme.TextDim;
@@ -210,6 +221,12 @@ namespace Berlit
             dataGridServices.BackColor = Theme.Surface;
             dataGridProcesses.BackColor = Theme.Surface;
 
+            infoPanelCpu.BackColor = Theme.Surface;
+            infoPanelGpu.BackColor = Theme.Surface;
+            infoPanelRam.BackColor = Theme.Surface;
+            infoPanelMainboard.BackColor = Theme.Surface;
+            infoPanelStorage.BackColor = Theme.Surface;
+
             panelStatus.BackColor = Theme.SurfaceAlt;
             labelStatus.Font = Fonts.Small;
             labelStatus.ForeColor = Theme.TextDim;
@@ -220,12 +237,14 @@ namespace Berlit
             panelPcToolbar.Paint += toolbar_Paint;
             panelServicesToolbar.Paint += toolbar_Paint;
             panelProcessesToolbar.Paint += toolbar_Paint;
+            panelInfoToolbar.Paint += toolbar_Paint;
             panelStatus.Paint += panelStatus_Paint;
 
             EnableDoubleBuffer(panelTop);
             EnableDoubleBuffer(panelPcToolbar);
             EnableDoubleBuffer(panelServicesToolbar);
             EnableDoubleBuffer(panelProcessesToolbar);
+            EnableDoubleBuffer(panelInfoToolbar);
             EnableDoubleBuffer(panelStatus);
             EnableDoubleBuffer(panelSearch);
 
@@ -367,9 +386,12 @@ namespace Berlit
             switch (tabControl1.SelectedIndex)
             {
                 case 1:
-                    if ((DateTime.Now - _servicesStamp).TotalMilliseconds >= 7000) RefreshServices();
+                    if (!_infoLoaded || (DateTime.Now - _infoStamp).TotalSeconds >= 60) RefreshInfo(false);
                     break;
                 case 2:
+                    if ((DateTime.Now - _servicesStamp).TotalMilliseconds >= 7000) RefreshServices();
+                    break;
+                case 3:
                     if ((DateTime.Now - _processesStamp).TotalMilliseconds >= 2000) RefreshProcesses();
                     break;
             }
@@ -390,9 +412,12 @@ namespace Berlit
                     if (force || (DateTime.Now - _hardwareStamp).TotalMilliseconds >= 1900) RefreshHardware();
                     break;
                 case 1:
-                    if (force || (DateTime.Now - _servicesStamp).TotalMilliseconds >= 7000) RefreshServices();
+                    if (force || !_infoLoaded || (DateTime.Now - _infoStamp).TotalSeconds >= 60) RefreshInfo(force);
                     break;
                 case 2:
+                    if (force || (DateTime.Now - _servicesStamp).TotalMilliseconds >= 7000) RefreshServices();
+                    break;
+                case 3:
                     if (force || (DateTime.Now - _processesStamp).TotalMilliseconds >= 2000) RefreshProcesses();
                     break;
             }
@@ -426,6 +451,77 @@ namespace Berlit
             {
                 _hardwareBusy = false;
             }
+        }
+
+        private void buttonInfoRefresh_Click(object sender, EventArgs e)
+        {
+            RefreshInfo(true);
+        }
+
+        private void buttonInfoCopy_Click(object sender, EventArgs e)
+        {
+            InfoPanel panel = ActiveInfoPanel();
+            if (panel != null) panel.CopySelectedOrAll();
+        }
+
+        private InfoPanel ActiveInfoPanel()
+        {
+            switch (tabInfo.SelectedIndex)
+            {
+                case 0: return infoPanelCpu;
+                case 1: return infoPanelGpu;
+                case 2: return infoPanelRam;
+                case 3: return infoPanelMainboard;
+                case 4: return infoPanelStorage;
+                default: return null;
+            }
+        }
+
+        private async void RefreshInfo(bool force)
+        {
+            if (!_ready || _infoBusy) return;
+            if (!force && _infoLoaded && (DateTime.Now - _infoStamp).TotalSeconds < 60) return;
+
+            _infoBusy = true;
+            try
+            {
+                InfoBundle bundle = await Task.Run(() => new InfoBundle
+                {
+                    Cpu = HardwareDetails.GetCpuSections(),
+                    Gpu = HardwareDetails.GetGpuSections(),
+                    Ram = HardwareDetails.GetMemorySections(),
+                    Board = HardwareDetails.GetMainboardSections(),
+                    Storage = HardwareDetails.GetStorageSections()
+                });
+                if (IsDisposed) return;
+
+                infoPanelCpu.SetSections(bundle.Cpu);
+                infoPanelGpu.SetSections(bundle.Gpu);
+                infoPanelRam.SetSections(bundle.Ram);
+                infoPanelMainboard.SetSections(bundle.Board);
+                infoPanelStorage.SetSections(bundle.Storage);
+
+                labelInfoUpdated.Text = "updated " + DateTime.Now.ToString("HH:mm:ss");
+                _infoLoaded = true;
+                _infoStamp = DateTime.Now;
+            }
+            catch (Exception ex)
+            {
+                ShowError("Hardware details read failed: " + ex.Message);
+            }
+            finally
+            {
+                _infoBusy = false;
+            }
+        }
+
+        private sealed class InfoBundle
+        {
+            public IList<InfoSection> Cpu;
+            public IList<InfoSection> Gpu;
+            public IList<InfoSection> Ram;
+            public IList<InfoSection> Board;
+            public IList<InfoSection> Storage;
         }
 
         private IList<HwNode> BuildHardwareTree()

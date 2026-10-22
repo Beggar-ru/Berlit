@@ -12,6 +12,7 @@ namespace Berlit
     public class DarkTabControl : TabControl
     {
         private int _hot = -1;
+        private bool _compact;
 
         public DarkTabControl()
         {
@@ -26,6 +27,26 @@ namespace Berlit
 
             // Страницы рисуются поверх тела контрола, поэтому фон тела = фон окна.
             BackColor = Theme.Back;
+        }
+
+        /// <summary>Компактные вкладки для вложенных панелей (CPU/GPU/RAM/...).</summary>
+        public bool Compact
+        {
+            get { return _compact; }
+            set
+            {
+                _compact = value;
+                if (!value) return;
+
+                ItemSize = new Size(112, 28);
+                Padding = new Point(12, 4);
+                Font = Fonts.Small;
+
+                if (IsHandleCreated)
+                {
+                    RecreateHandle();
+                }
+            }
         }
 
         private int TabAt(Point point)
